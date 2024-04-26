@@ -1,0 +1,38 @@
+name: CI Pipeline
+
+on:
+  push:
+    tags:
+      - '*'
+
+env:
+  LINUX_AMD64_BINARY: ${{ github.event.repository.name }}-linux-amd64-${{ github.ref_name }}.tar.gz
+  PACKAGE_REGISTRY_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ github.ref_name }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.8
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+      
+      - name: Install dependencies
+        run: |
+          python -V
+          echo "VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+          sed -i "s/^version=.*/version='${{ env.VERSION }}'/" version.py
+          pip install -U pip
+          pip install -r requirements.txt
+          pyinstaller ${{ github.event.repository.name }} --onefile
+
+      - name: Test application
+        run: |
+          ./dist/${{ github.event.repository.name }} --version
