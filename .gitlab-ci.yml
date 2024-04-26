@@ -1,0 +1,49 @@
+variables:
+  LINUX_AMD64_BINARY: "${CI_PROJECT_NAME}-linux-amd64-${CI_COMMIT_TAG}.tar.gz"
+  PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}"
+
+stages:
+  - build
+  - package
+
+build_job:
+  stage: build
+  image: python:3.8
+  script:
+    - |
+      set -e
+      python -V
+      export VERSION=${CI_COMMIT_TAG:-${CI_COMMIT_SHA}}
+      printf "$(cat version.py)" "${VERSION}" > version.py
+      pip install -U pip
+      pip install -r requirements.txt
+      pyinstaller ${CI_PROJECT_NAME} --onefile
+      set -x
+      ./dist/${CI_PROJECT_NAME} --version
+      #./dist/${CI_PROJECT_NAME} bash-completion > ./bash-completion.sh
+      source ./bash-completion.sh
+      set +x
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 day
+
+release_job:
+  stage: package
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  script:
+    - |
+      apk add curl
+      tar -C dist/ -zcvf ${LINUX_AMD64_BINARY} ${CI_PROJECT_NAME}
+      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file ${LINUX_AMD64_BINARY} ${PACKAGE_REGISTRY_URL}/${LINUX_AMD64_BINARY}
+  release:
+    name: '${CI_PROJECT_NAME} ${CI_COMMIT_TAG}'
+    description: '${CI_PROJECT_NAME} ${CI_COMMIT_TAG}'
+    tag_name: '${CI_COMMIT_TAG}'
+    ref: '${CI_COMMIT_TAG}'
+    assets:
+      links:
+        - name: '${LINUX_AMD64_BINARY}'
+          url: '${PACKAGE_REGISTRY_URL}/${LINUX_AMD64_BINARY}'
+  rules:
+    - if: '$CI_COMMIT_TAG != null'

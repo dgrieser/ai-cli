@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+# PYTHON_ARGCOMPLETE_OK
+import argparse
+import argcomplete
+import json
+import os
+import psutil
+import sys
+from time import gmtime, strftime
+from openai import OpenAI
+from version import *
+
+parent_folder = 'openai'
+model_names = []
+
+def log_time(f):
+    print(strftime('%Y-%m-%d %H:%M:%S', gmtime()), file=f, end='')
+    print(": ", file=f, end='')
+
+def log_args(f, args):
+    print(str(args), file=f)
+
+def log_open(program_args=None):
+    log_file = os.path.basename(__file__)  + '.log'
+    log_folder = os.path.join(os.path.expanduser('~'), '.cache', parent_folder)
+    os.makedirs(log_folder, exist_ok=True)
+    f = open(os.path.join(log_folder, log_file), 'a')
+    if program_args:
+        log_time(f)
+        log_args(f, program_args)
+    return f
+
+def log(f, text):
+    print(text, end='')
+    print(text, file=f, end='')
+
+def log_close(f, print_footer=True):
+    if print_footer:
+        print()
+        print(file=f)
+    f.close()
+
+def get_session_path(session):
+    prefix = os.path.basename(__file__)  + '_'
+    session_file = os.path.basename(__file__)  + '_' + session + '.session'
+    session_folder = os.path.join(os.path.expanduser('~'), '.cache', parent_folder)
+    os.makedirs(session_folder, exist_ok=True)
+    return os.path.join(session_folder, session_file)
+
+def list_sessions():
+    prefix = os.path.basename(__file__)  + '_'
+    session_folder = os.path.join(os.path.expanduser('~'), '.cache', parent_folder)
+    os.makedirs(session_folder, exist_ok=True)
+    # sort by creation date
+    sessions = [f for f in os.listdir(session_folder) if f.startswith(prefix) and f.endswith('.session')]
+    sessions.sort(key=lambda f: os.path.getctime(os.path.join(session_folder, f)))
+    return [f[len(prefix):-len('.session')] for f in sessions]
+
+def session_complete(prefix, parsed_args, **kwargs):
+    return [s for s in list_sessions() if s.startswith(prefix)]
+
+def list_models():
+    global model_names
+    if not model_names:
+        client = OpenAI()
+        models = client.models.list()
+        models.data = [m for m in models.data if 'gpt' in m.id]
+        models.data.sort(key= lambda x: x.created, reverse=True)
+        model_names = [m.id for m in models.data]
+    return model_names
+
+def model_complete(prefix, parsed_args, **kwargs):
+    models = list_models()
+    return [m for m in models if m.startswith(prefix)]
+
+def switch_to_latest_model(model):
+    models = list_models()
+    # get the first model which starts with the passed argument, or the leave as is
+    return next((m for m in models if m.startswith(model)), model)
+
+def get_session(session):
+    session_path = get_session_path(session)
+    messages = []
+    if os.path.exists(session_path):
+        f = open(session_path, 'r')
+        for line in f:
+            messages.append(json.loads(line))
+        f.close()
+    return messages
+
+def append_session(session, messages):
+    session_path = get_session_path(session)
+    f = open(session_path, 'a')
+    for message in messages:
+        print(json.dumps(message), file=f)
+    f.close()
+
+def merge_content(file, text):
+    result = None
+    if text:
+        result = ' '.join(text)
+
+    file_content = None
+    if file == '-':
+        file_content = sys.stdin.read()
+    elif file:
+        with open(file) as f: file_content = f.read()
+
+    if file_content:
+        if result and len(result) > 0:
+            result += '\n'
+        else:
+            result = ''
+
+        result += file_content
+
+    return result
+
+def main():
+    parser = argparse.ArgumentParser(description='Chat with ChatGPT', formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument("--version", action="version", version=f"{os.path.basename(sys.argv[0])} {VERSION}")
+    parser.add_argument('-m', '--model', type=str, help='Which model to use', default='gpt-3.5-turbo').completer = model_complete
+    parser.add_argument('-f', '--file', type=str, help='File with content to append to the prompt, - for stdin', default='').completer = lambda: [f for f in os.listdir('.') if os.path.isfile(f)]
+    parser.add_argument('-r', '--role', type=str, help='Which role to take')
+    parser.add_argument('--role-file', type=str, help='File with content to append to the role, - for stdin', default='').completer = lambda: [f for f in os.listdir('.') if os.path.isfile(f)]
+    parser.add_argument('-w', '--wait', action='store_true', help='Wait for the full response, don\'t stream', default=False)
+    parser.add_argument('-s', '--session', type=str, help='Session to start or reuse', default='').completer = session_complete
+    parser.add_argument("-v", "--verbose", action="store_true", help="Print details like used model and session", default=False)
+    parser.add_argument("--no-session", action="store_true", help="Prevent session creation and always start fresh", default=False)
+    list_group = parser.add_mutually_exclusive_group()
+    list_group.add_argument('--list-sessions', action='store_true', help='List sessions', default=False)
+    list_group.add_argument('--list-models', action='store_true', help='List models', default=False)
+    list_group.add_argument('--print-session', action='store_true', help='Print session', default=False)
+    parser.add_argument('prompt', type=str, nargs='*', help='The prompt to send to ChatGPT')
+    argcomplete.autocomplete(parser)
+
+    args = parser.parse_args()
+
+    if args.print_session:
+        if not args.session:
+            print("ERROR: No session specified")
+            parser.print_help()
+            sys.exit(1)
+        messages = get_session(args.session)
+        if not messages:
+            print("ERROR: Session not found")
+            sys.exit(1)
+
+        first = True
+        for message in messages:
+            if first:
+                first = False
+            else:
+                print()
+            role = message['role']
+            role = role[0].upper() + role[1:]
+            print(role + ':\n' + message['content'])
+        sys.exit(0)
+
+    if args.list_sessions:
+        for session in list_sessions():
+            print(session)
+        sys.exit(0)
+
+    if args.list_models:
+        for model in list_models():
+            print(model)
+        sys.exit(0)
+
+    if not args.prompt and not args.file:
+        print("ERROR: No prompt specified")
+        parser.print_help()
+        sys.exit(0)
+
+    # make sure we use the latest model
+    args.model = switch_to_latest_model(args.model)
+
+    f = log_open(args)
+
+    client = OpenAI()
+    messages = []
+
+    session = None
+    if not args.no_session:
+        if args.session:
+            session = args.session
+            if args.verbose:
+                print("Session:  " + session)
+        elif sys.__stdin__.isatty():
+            # use pid of parent bash shell as session when in interactive shell
+            proc = psutil.Process(os.getpid())
+            while proc is not None:
+                if len(proc.cmdline()) == 1 and proc.cmdline()[0].endswith('bash') and proc.exe().endswith('/bin/bash'):
+                    # use parent bash shell pid as session
+                    timestamp = int(proc.create_time())
+                    session = str(proc.pid) + "_" + strftime("%Y-%m-%d_%H-%M-%S", gmtime(timestamp))
+
+                    if args.verbose:
+                        print("Session:  " + str(session) + " (tty)")
+                    break
+                proc = proc.parent()
+
+    if session:
+        # load messages from session
+        session_messages = get_session(session)
+        messages.extend(session_messages)
+    else:
+        if args.verbose:
+            print("Session:  N/A")
+
+    new_messages = []
+    role = merge_content(args.role_file, args.role)
+    if role:
+        # don't change role
+        for message in messages:
+            if message["role"] == "system":
+                # check if args.role is different
+                if role != message["content"]:
+                    print("ERROR: Role cannot be changed in an existing session, before: " + message["content"] + ", after: " + role)
+                    parser.print_help()
+                    sys.exit(0) 
+                break
+
+        new_messages.append({"role": "system", "content": role})
+
+    new_messages.append({"role": "user", "content": merge_content(args.file, args.prompt)})
+    messages.extend(new_messages)
+
+    if args.verbose:
+        print("Messages: " + str(len(messages)))
+
+    result = client.chat.completions.create(
+        model=args.model,
+        messages=messages,
+        stream=not args.wait,
+    )
+
+    if args.verbose:
+        print()
+
+    answer = ""
+    if args.wait:
+        if args.verbose:
+            print("ID:       " + str(result.id))
+            print("Creation: " + strftime('%Y-%m-%dT%H:%M:%S%z', gmtime(result.created)))
+            print("Choices:  " + str(len(result.choices)))
+            print("Model:    " + result.model)
+            print("Tokens:   " + str(result.usage.total_tokens))
+            print()
+
+        answer = result.choices[0].message.content
+        log(f, answer)
+    else:
+        first = True
+        for chunk in result:
+            if first:
+                first = False
+                if args.verbose:
+                    print("ID:       " + str(chunk.id))
+                    print("Creation: " + strftime('%Y-%m-%dT%H:%M:%S%z', gmtime(chunk.created)))
+                    print("Choices:  " + str(len(chunk.choices)))
+                    print("Model:    " + chunk.model)
+                    print()
+
+            answer_chunk = chunk.choices[0].delta.content
+            if answer_chunk is not None:
+                answer += answer_chunk
+                log(f, answer_chunk)
+
+    if session:
+        # save query and answer to session
+        new_messages.append({"role": "assistant", "content": answer})
+        append_session(session, new_messages)
+
+    log_close(f)
+
+
+if __name__ == "__main__":
+    main()
