@@ -21,4 +21,6 @@ def get_ai_providers():
     providers = []
     from openai_ai_provider import OpenAIProvider
     providers.append(OpenAIProvider())
+    from anthropic_ai_provider import AnthropicAIProvider
+    providers.append(AnthropicAIProvider())
     return providers

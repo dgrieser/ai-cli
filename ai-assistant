@@ -301,6 +301,12 @@ def main():
     global VERBOSE
     VERBOSE = args.verbose
 
+    if not args.model in list_models():
+        print("ERROR: Unknown model:", "'" + args.model + "'.", "Available models:", ", ".join(list_models()))
+        sys.exit(1)
+
+    ai_provider = models[args.model]
+
     # make sure we use the latest model
     if not args.no_model_switch:
         args.model = switch_to_latest_model(args.model)
@@ -358,100 +364,105 @@ def main():
 
     print_verbose("Messages", str(len(messages)))
 
-    ai_provider = models[args.model]
+    try:
+        result = ai_provider.chat_completion(messages, args.model, not args.wait)
 
-    result = ai_provider.chat_completion(messages, args.model, not args.wait)
-
-    handle_metadata_func = None
-    if VERBOSE:
-        handle_metadata_func = print_verbose
-        print_verbose()
-
-    stop_event = None
-    command_queue = None
-    command_thread = None
-    if not args.wait and args.output_audio_command and (args.output == 'audio' or args.output == 'audio+text'):
-        stop_event = threading.Event()
-        command_queue = queue.Queue()
-        command_thread = threading.Thread(target=run_audio_file_queue, args=(args.output_audio_command, command_queue, stop_event))
-        command_thread.start()
-
-    tts_threads = []
-    tts_queue = queue.Queue()
-    answer = ""
-    if args.wait:
-        answer = ai_provider.convert_result_to_text(result, handle_metadata_func)
-
+        handle_metadata_func = None
         if VERBOSE:
+            handle_metadata_func = print_verbose
             print_verbose()
 
-        if args.output == 'audio' or args.output == 'audio+text':
-            tts(answer, args.output_audio_command)
-        if args.output == 'text' or args.output == 'audio+text':
-            log(f, answer)
-    else:
-        first = True
+        stop_event = None
+        command_queue = None
+        command_thread = None
+        if not args.wait and args.output_audio_command and (args.output == 'audio' or args.output == 'audio+text'):
+            stop_event = threading.Event()
+            command_queue = queue.Queue()
+            command_thread = threading.Thread(target=run_audio_file_queue, args=(args.output_audio_command, command_queue, stop_event))
+            command_thread.start()
+
+        tts_threads = []
+        tts_queue = queue.Queue()
         answer = ""
-        segment = ""
-        for chunk in result:
-            answer_chunk = ai_provider.convert_chunk_to_text(chunk, handle_metadata_func)
-            if first:
-                first = False
-                handle_metadata_func = None
+        if args.wait:
+            answer = ai_provider.convert_result_to_text(result, handle_metadata_func)
+
+            if VERBOSE:
                 print_verbose()
 
-            if answer_chunk is not None:
-                answer += answer_chunk
-                segment += answer_chunk
-                if args.output == 'text':
-                    log(f, answer_chunk)
-                if args.output == 'audio' or args.output == 'audio+text':
-                    # make sure we try to send sentences to tts, with at least 50 charactersS
-                    match = re.search(r'^.{50,}[^0-9][\.\!\?]', segment, re.DOTALL)
-                    if match:
-                        sentence_end = match.end()
-                        sentence = segment[:sentence_end].strip()
-                        segment = segment[sentence_end:]
-                        if sentence:
-                            if not tts_queue.empty():
-                                handle_audio_file(tts_queue.get(), args.output_audio_command, command_queue)
-                            tts(sentence, args.output_audio_command, tts_threads, tts_queue)
+            if args.output == 'audio' or args.output == 'audio+text':
+                tts(answer, args.output_audio_command)
+            if args.output == 'text' or args.output == 'audio+text':
+                log(f, answer)
+        else:
+            first = True
+            answer = ""
+            segment = ""
+            for chunk in result:
+                answer_chunk = ai_provider.convert_chunk_to_text(chunk, handle_metadata_func)
+                if first:
+                    first = False
+                    handle_metadata_func = None
+                    print_verbose()
 
-        if args.output == 'audio' or args.output == 'audio+text':
-            # tts the last segment, if any
-            segment = segment.strip()
-            if segment:
-                tts(segment, args.output_audio_command, tts_threads, tts_queue)
+                if answer_chunk is not None:
+                    answer += answer_chunk
+                    segment += answer_chunk
+                    if args.output == 'text':
+                        log(f, answer_chunk)
+                    if args.output == 'audio' or args.output == 'audio+text':
+                        # make sure we try to send sentences to tts, with at least 50 charactersS
+                        match = re.search(r'^.{50,}[^0-9][\.\!\?]', segment, re.DOTALL)
+                        if match:
+                            sentence_end = match.end()
+                            sentence = segment[:sentence_end].strip()
+                            segment = segment[sentence_end:]
+                            if sentence:
+                                if not tts_queue.empty():
+                                    handle_audio_file(tts_queue.get(), args.output_audio_command, command_queue)
+                                tts(sentence, args.output_audio_command, tts_threads, tts_queue)
 
-            # wait for all tts tasks to be done
-            print_verbose("Status", "Waiting for TTS threads to finish...")
-            try:
-                for t in tts_threads:
-                    t.join()
-            except KeyboardInterrupt:
-                sys.exit(0)
+            if args.output == 'audio' or args.output == 'audio+text':
+                # tts the last segment, if any
+                segment = segment.strip()
+                if segment:
+                    tts(segment, args.output_audio_command, tts_threads, tts_queue)
 
-            print_verbose("Status", "Handling remaining audio files...")
-            while not tts_queue.empty():
-                handle_audio_file(tts_queue.get(), args.output_audio_command, command_queue)
-
-            if command_thread and stop_event:
-                print_verbose("Status", "Waiting for command thread to finish...")
-                stop_event.set()
+                # wait for all tts tasks to be done
+                print_verbose("Status", "Waiting for TTS threads to finish...")
                 try:
-                    command_thread.join()
+                    for t in tts_threads:
+                        t.join()
                 except KeyboardInterrupt:
                     sys.exit(0)
 
-        if args.output == 'audio+text':
-            if not args.output_audio_command:
-                print()
-            log(f, answer)
+                print_verbose("Status", "Handling remaining audio files...")
+                while not tts_queue.empty():
+                    handle_audio_file(tts_queue.get(), args.output_audio_command, command_queue)
 
-    if session:
-        # save query and answer to session
-        new_messages.append({"role": "assistant", "content": answer})
-        append_session(session, new_messages)
+                if command_thread and stop_event:
+                    print_verbose("Status", "Waiting for command thread to finish...")
+                    stop_event.set()
+                    try:
+                        command_thread.join()
+                    except KeyboardInterrupt:
+                        sys.exit(0)
+
+            if args.output == 'audio+text':
+                if not args.output_audio_command:
+                    print()
+                log(f, answer)
+
+        if session:
+            # save query and answer to session
+            new_messages.append({"role": "assistant", "content": answer})
+            append_session(session, new_messages)
+    except KeyboardInterrupt:
+        sys.exit(0)
+    except Exception as e:
+        print("ERROR: " + str(e))
+        log_close(f, False)
+        exit(1)
 
     log_close(f)
 
