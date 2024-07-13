@@ -227,7 +227,7 @@ def process_chunk(chunk_index, chunk_text, *args):
     pass
 
 def main():
-    parser = argparse.ArgumentParser(description='Chat with ChatGPT', formatter_class=argparse.RawTextHelpFormatter)
+    parser = argparse.ArgumentParser(description='Chat based AI assistant', formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("--version", action="version", version=f"{os.path.basename(sys.argv[0])} {VERSION}")
     parser.add_argument('-m', '--model', type=str, help='Which model to use', default='gpt-4o').completer = model_complete
     parser.add_argument('-f', '--file', type=str, help='File with content to append to the prompt, - for stdin', default='').completer = lambda: [f for f in os.listdir('.') if os.path.isfile(f)]
@@ -246,7 +246,7 @@ def main():
     list_group.add_argument('--list-sessions', action='store_true', help='List sessions', default=False)
     list_group.add_argument('--list-models', action='store_true', help='List models', default=False)
     list_group.add_argument('--print-session', action='store_true', help='Print session', default=False)
-    parser.add_argument('prompt', type=str, nargs='*', help='The prompt to send to ChatGPT')
+    parser.add_argument('prompt', type=str, nargs='*', help='The prompt to send')
     argcomplete.autocomplete(parser)
 
     args = parser.parse_args()
