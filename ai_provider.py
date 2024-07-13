@@ -19,6 +19,6 @@ class AIProvider(ABC):
 
 def get_ai_providers():
     providers = []
-    from openai_provider import OpenAIProvider
+    from openai_ai_provider import OpenAIProvider
     providers.append(OpenAIProvider())
     return providers
