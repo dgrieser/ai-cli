@@ -185,7 +185,10 @@ def handle_audio_file(audio_file, command, command_queue = None):
 def merge_content(file, audio_file, text):
     result = None
     if text:
-        result = ' '.join(text)
+        if isinstance(text, str):
+            result = text
+        else:
+            result = ' '.join(text)
 
     audio_content = None
     if audio_file:

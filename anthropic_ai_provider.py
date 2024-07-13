@@ -26,10 +26,19 @@ class AnthropicAIProvider(AIProvider):
         return self.model_names
 
     def chat_completion(self, messages, model, stream=False):
+        system_message = ''
+        conversation_messages = []
+        for m in messages:
+            if m.get('role', '') == 'system':
+                system_message = m.get('content', '')
+            else:
+                conversation_messages.append(m)
+
         return self.client.messages.create(
             max_tokens=1024,
             model=model,
-            messages=messages,
+            messages=conversation_messages,
+            system=system_message,
             stream=stream,
         )
     
