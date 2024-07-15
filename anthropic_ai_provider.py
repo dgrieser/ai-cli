@@ -42,7 +42,7 @@ class AnthropicAIProvider(AIProvider):
             stream=stream,
         )
     
-    def convert_result_to_text(self, result, handle_metadata_func):
+    def convert_result_to_text(self, result, sources, handle_metadata_func):
         text = result.content[0].text if result and result.content and len(result.content) > 0 else ''
         if handle_metadata_func:
             handle_metadata_func("ID", str(result.id))
@@ -50,7 +50,7 @@ class AnthropicAIProvider(AIProvider):
             handle_metadata_func("Usage", str(result.usage))
         return text
     
-    def convert_chunk_to_text(self, event, handle_metadata_func):
+    def convert_chunk_to_text(self, event, sources, handle_metadata_func):
         text = ''
         if hasattr(event, 'message'):
             event = event.message
@@ -71,3 +71,6 @@ class AnthropicAIProvider(AIProvider):
             if hasattr(event, 'usage'):
                 handle_metadata_func("Usage", str(event.usage))
         return text
+    
+    def close(self):
+        pass

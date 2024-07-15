@@ -22,7 +22,7 @@ class OpenAIProvider(AIProvider):
             stream=stream,
         )
     
-    def convert_result_to_text(self, result, handle_metadata_func):
+    def convert_result_to_text(self, result, sources, handle_metadata_func):
         text = result.choices[0].message.content
         if handle_metadata_func:
             handle_metadata_func("ID", str(result.id))
@@ -32,10 +32,13 @@ class OpenAIProvider(AIProvider):
             handle_metadata_func("Tokens", str(result.usage.total_tokens))
         return text
     
-    def convert_chunk_to_text(self, chunk, handle_metadata_func):
+    def convert_chunk_to_text(self, chunk, sources, handle_metadata_func):
         if handle_metadata_func:
             handle_metadata_func("ID", str(chunk.id))
             handle_metadata_func("Creation", time.strftime('%Y-%m-%dT%H:%M:%S%z', time.gmtime(chunk.created)))
             handle_metadata_func("Choices", str(len(chunk.choices)))
             handle_metadata_func("Model", chunk.model)
         return chunk.choices[0].delta.content
+    
+    def close(self):
+        pass

@@ -10,11 +10,15 @@ class AIProvider(ABC):
         pass
 
     @abstractmethod
-    def convert_result_to_text(self, result, handle_metadata_func):
+    def convert_result_to_text(self, result, sources, handle_metadata_func):
         pass
 
     @abstractmethod
-    def convert_chunk_to_text(self, chunk, handle_metadata_func):
+    def convert_chunk_to_text(self, chunk, sources, handle_metadata_func):
+        pass
+
+    @abstractmethod
+    def close(self):
         pass
 
 def get_ai_providers():
@@ -23,4 +27,8 @@ def get_ai_providers():
     providers.append(OpenAIProvider())
     from anthropic_ai_provider import AnthropicAIProvider
     providers.append(AnthropicAIProvider())
+    #from metaai_ai_provider import MetaAiProvider
+    #providers.append(MetaAiProvider())
+    from perplexity_ai_provider import PerplexityAiProvider
+    providers.append(PerplexityAiProvider())
     return providers

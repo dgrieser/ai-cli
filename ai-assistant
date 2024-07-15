@@ -12,6 +12,7 @@ import time
 import threading
 import subprocess
 import queue
+from collections import OrderedDict
 from ai_provider import get_ai_providers
 from tts_provider import get_tts_providers
 from stt_provider import get_stt_providers
@@ -245,6 +246,7 @@ def main():
     parser.add_argument("-v", "--verbose", action="store_true", help="Print details like used model and session", default=False)
     parser.add_argument("--no-session", action="store_true", help="Prevent session creation and always start fresh", default=False)
     parser.add_argument("--no-model-switch", action="store_true", help="Prevent switching to latest model", default=False)
+    parser.add_argument("--no-sources", action="store_true", help="Don't print sources, e.g. internet sources", default=False)
     list_group = parser.add_mutually_exclusive_group()
     list_group.add_argument('--list-sessions', action='store_true', help='List sessions', default=False)
     list_group.add_argument('--list-models', action='store_true', help='List models', default=False)
@@ -368,6 +370,10 @@ def main():
     print_verbose("Messages", str(len(messages)))
 
     try:
+        sources = None
+        if args.no_sources == False:
+            sources = OrderedDict()
+
         result = ai_provider.chat_completion(messages, args.model, not args.wait)
 
         handle_metadata_func = None
@@ -388,7 +394,7 @@ def main():
         tts_queue = queue.Queue()
         answer = ""
         if args.wait:
-            answer = ai_provider.convert_result_to_text(result, handle_metadata_func)
+            answer = ai_provider.convert_result_to_text(result, sources, handle_metadata_func)
 
             if VERBOSE:
                 print_verbose()
@@ -402,7 +408,7 @@ def main():
             answer = ""
             segment = ""
             for chunk in result:
-                answer_chunk = ai_provider.convert_chunk_to_text(chunk, handle_metadata_func)
+                answer_chunk = ai_provider.convert_chunk_to_text(chunk, sources, handle_metadata_func)
                 if first:
                     first = False
                     handle_metadata_func = None
@@ -456,6 +462,11 @@ def main():
                     print()
                 log(f, answer)
 
+        if sources:
+            print()
+            for k, v in sources.items():
+                log(f, f'\n{v}:\n{k}\n')
+
         if session:
             # save query and answer to session
             new_messages.append({"role": "assistant", "content": answer})
@@ -465,8 +476,13 @@ def main():
     except Exception as e:
         print("ERROR: " + str(e))
         log_close(f, False)
+        try:
+            ai_provider.close()
+        except:
+            pass
         exit(1)
 
+    ai_provider.close()
     log_close(f)
 
 
