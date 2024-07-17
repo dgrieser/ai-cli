@@ -1,5 +1,9 @@
+anthropic
+beautifulsoup4
+openai
+git+https://github.com/nathanrchn/perplexityai.git
+playsound
 argparse
 argcomplete
-openai
 psutil
 pyinstaller
