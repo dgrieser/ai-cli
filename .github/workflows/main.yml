@@ -1,4 +1,4 @@
-name: CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -7,31 +7,54 @@ on:
 
 env:
   LINUX_AMD64_BINARY: ${{ github.event.repository.name }}-linux-amd64-${{ github.ref_name }}.tar.gz
-  PACKAGE_REGISTRY_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ github.ref_name }}
+  GENERIC_LINUX_AMD64_BINARY: ${{ github.event.repository.name }}-linux-amd64.tar.gz
 
 jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: python:3.8
-
+      image: python:3.12
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.8'
-      
-      - name: Install dependencies
+      - uses: actions/checkout@v4
+      - name: Build and test
         run: |
+          set -e
           python -V
-          printf "$(cat version.py)" "${{ github.ref_name }}" > version.py
+          export VERSION=${{ github.ref_name }}
+          printf "$(cat version.py)" "${VERSION}" > version.py
           pip install -U pip
           pip install -r requirements.txt
           pyinstaller ${{ github.event.repository.name }} --onefile
-
-      - name: Test application
-        run: |
+          set -x
           ./dist/${{ github.event.repository.name }} --version
+          set +x
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tar -C dist/ -zcvf ${LINUX_AMD64_BINARY} ${{ github.event.repository.name }}
+          gh release create ${{ github.ref_name }} \
+            --title "${{ github.event.repository.name }} ${{ github.ref_name }}" \
+            --notes "${{ github.event.repository.name }} ${{ github.ref_name }}" \
+            ${LINUX_AMD64_BINARY}
+      - name: Upload to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.ref_name }} ${LINUX_AMD64_BINARY} \
+            --clobber
