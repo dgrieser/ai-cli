@@ -1,5 +1,6 @@
 variables:
   LINUX_AMD64_BINARY: "${CI_PROJECT_NAME}-linux-amd64-${CI_COMMIT_TAG}.tar.gz"
+  GENERIC_LINUX_AMD64_BINARY: "${CI_PROJECT_NAME}-linux-amd64.tar.gz"
   PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_PROJECT_NAME}/${CI_COMMIT_TAG}"
 
 stages:
@@ -8,7 +9,7 @@ stages:
 
 build_job:
   stage: build
-  image: python:3.8
+  image: python:3.12
   script:
     - |
       set -e
@@ -20,8 +21,6 @@ build_job:
       pyinstaller ${CI_PROJECT_NAME} --onefile
       set -x
       ./dist/${CI_PROJECT_NAME} --version
-      #./dist/${CI_PROJECT_NAME} bash-completion > ./bash-completion.sh
-      source ./bash-completion.sh
       set +x
   artifacts:
     paths:
@@ -45,5 +44,6 @@ release_job:
       links:
         - name: '${LINUX_AMD64_BINARY}'
           url: '${PACKAGE_REGISTRY_URL}/${LINUX_AMD64_BINARY}'
+          direct_asset_path: '/binaries/${GENERIC_LINUX_AMD64_BINARY}'
   rules:
     - if: '$CI_COMMIT_TAG != null'
