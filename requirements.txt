@@ -3,7 +3,6 @@ beautifulsoup4
 openai
 git+https://github.com/dgrieser/perplexityai.git
 playsound
-PyObjC
 argparse
 argcomplete
 psutil
