@@ -2,7 +2,7 @@ anthropic
 beautifulsoup4
 openai
 git+https://github.com/dgrieser/perplexityai.git
-playsound
+playsound=1.2.2
 argparse
 argcomplete
 psutil
