@@ -14,7 +14,7 @@ build_job:
     - |
       set -e
       apt update
-      apt install libgstreamer1.0-0 gstreamer1.0-tools
+      apt install -y libgstreamer1.0-0 gstreamer1.0-tools
       python -V
       export VERSION=${CI_COMMIT_TAG:-${CI_COMMIT_SHA}}
       printf "$(cat version.py)" "${VERSION}" > version.py
