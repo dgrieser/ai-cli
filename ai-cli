@@ -19,7 +19,7 @@ from tts_provider import get_tts_providers
 from stt_provider import get_stt_providers
 from version import *
 
-app_identifier = 'ai-assistant'
+app_identifier = 'ai-cli'
 
 models = {}
 ai_providers = []
