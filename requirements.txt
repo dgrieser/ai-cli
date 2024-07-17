@@ -1,7 +1,7 @@
 anthropic
 beautifulsoup4
 openai
-git+https://github.com/nathanrchn/perplexityai.git
+git+https://github.com/dgrieser/perplexityai.git
 playsound
 argparse
 argcomplete
