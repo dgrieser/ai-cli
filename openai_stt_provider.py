@@ -6,7 +6,10 @@ class OpenAISTTProvider(STTProvider):
         self.client = OpenAI()
         self.model_names = []
 
-    def list_models(self):
+    def name(self):
+        return 'openai-whisper'
+
+    def _list_models(self):
         if not self.model_names:
             models = self.client.models.list()
             models.data = [m for m in models.data if 'whisper' in m.id]

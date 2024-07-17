@@ -11,14 +11,17 @@ class OpenAITTSProvider(TTSProvider):
         self.client = OpenAI()
         self.model_names = []
 
-    def list_models(self):
+    def name(self):
+        return 'openai-tts'
+
+    def _list_models(self):
         if not self.model_names:
             models = self.client.models.list()
             models.data = [m for m in models.data if 'tts' in m.id]
             models.data.sort(key=lambda x: x.created, reverse=True)
             self.model_names = [m.id for m in models.data]
         return self.model_names
-    
+
     def text_to_speech(self, text, model, voice, speed, audio_file):
         with self.client.audio.speech.with_streaming_response.create(
             model=model if model else 'tts-1',

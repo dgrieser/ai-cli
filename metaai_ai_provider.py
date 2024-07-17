@@ -7,13 +7,16 @@ class MetaAiProvider(AIProvider):
         self.client = MetaAI()
         self.model_names = [ 'meta-ai-web' ]
 
-    def list_models(self):
+    def name(self):
+        return "meta-ai"
+
+    def _list_models(self):
         return self.model_names
 
     def chat_completion(self, messages, model, stream=False):
         prompt = messages[-1].get('content', '')
         return self.client.prompt(message=prompt, stream=stream)
-    
+
     def convert_result_to_text(self, result, sources, handle_metadata_func):
         text = result.get('message', '')
         sources = result.get('sources', [])
@@ -22,7 +25,7 @@ class MetaAiProvider(AIProvider):
         for s in sources:
             text += "\n"
             text += f"{s.get('title', '')}: {s.get('link', '')}\n"
-    
+
     def convert_chunk_to_text(self, chunk, sources, handle_metadata_func):
         # TODO: chunks are iterative, need to handle that
         return chunk.get('message', '')

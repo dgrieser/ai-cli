@@ -12,6 +12,7 @@ import time
 import threading
 import subprocess
 import queue
+from playsound import playsound
 from collections import OrderedDict
 from ai_provider import get_ai_providers
 from tts_provider import get_tts_providers
@@ -37,7 +38,7 @@ def log_args(f, args):
     print(str(args), file=f)
 
 def log_open(program_args=None):
-    log_file = os.path.basename(__file__)  + '.log'
+    log_file = f'{app_identifier}.log'
     log_folder = os.path.join(os.path.expanduser('~'), '.cache', app_identifier)
     os.makedirs(log_folder, exist_ok=True)
     f = open(os.path.join(log_folder, log_file), 'a')
@@ -51,14 +52,16 @@ def log(f, text):
     print(text, file=f, end='')
 
 def log_close(f, print_footer=True):
-    if print_footer:
-        print()
-        print(file=f)
-    f.close()
+    try:
+        if print_footer:
+            print()
+            print(file=f)
+        f.close()
+    except:
+        pass
 
 def get_session_path(session):
-    prefix = os.path.basename(__file__)  + '_'
-    session_file = prefix + session + '.session'
+    session_file = f'{app_identifier}_{session}.session'
     session_folder = os.path.join(os.path.expanduser('~'), '.cache', app_identifier)
     os.makedirs(session_folder, exist_ok=True)
     return os.path.join(session_folder, session_file)
@@ -78,7 +81,7 @@ def get_user_prompt_from_session(session_file):
     return prompt
 
 def list_sessions():
-    prefix = os.path.basename(__file__)  + '_'
+    prefix = f'{app_identifier}_'
     session_folder = os.path.join(os.path.expanduser('~'), '.cache', app_identifier)
     os.makedirs(session_folder, exist_ok=True)
     # sort by creation date
@@ -92,10 +95,12 @@ def session_complete(prefix, parsed_args, **kwargs):
     return [s for s in list_sessions() if s.startswith(prefix)]
 
 def list_models():
+    session_folder = os.path.join(os.path.expanduser('~'), '.cache', app_identifier)
+    os.makedirs(session_folder, exist_ok=True)
     global models
     if not models:
         for provider in ai_providers:
-            for model in provider.list_models():
+            for model in provider.list_models(session_folder):
                 models[model] = provider
     return list(models.keys())
 
@@ -135,7 +140,7 @@ def run_stt(audio_file):
     return message
 
 def run_tts(text, audio_file):
-    print_verbose("TTS", str(text))
+    print_verbose("TTS", str(audio_file), str(text))
     default_tts_provider.text_to_speech(text, model=None, voice=None, speed=1.0, audio_file=audio_file)
 
 def tts(text, command, tts_threads = None, tts_queue = None):
@@ -149,39 +154,56 @@ def tts(text, command, tts_threads = None, tts_queue = None):
         run_tts(text, audio_file)
         handle_audio_file(audio_file, command)
 
-def run_audio_command(audio_file, command):
-    if '{}' in command:
-        command = command.format(audio_file)
-    print_verbose("Status", "Running audio command", str(command))
-    try:
-        subprocess.run(['bash', '-c', command], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except KeyboardInterrupt:
-        pass
-    except Exception as e:
-        print("ERROR: Failed to run output audio command: " + str(e), file=sys.stderr, flush=True)
+def play_audio_file(audio_file, command, index = 0):
+    if index == 0:
+        # check file size
+        while os.path.getsize(audio_file) == 0:
+            print_verbose("Status", "Delaying audio", str(audio_file))
+            time.sleep(0.1)
+
+        # until we support proper streaming, we need to wait a bit longer
+        time.sleep(0.5)
+
+    if command:
+        if '{}' in command:
+            command = command.format(audio_file)
+        print_verbose("Status", "Running audio command", str(command))
+        try:
+            subprocess.run(['bash', '-c', command], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except KeyboardInterrupt:
+            sys.exit(0)
+        except Exception as e:
+            print("ERROR: Failed to run output audio command: " + str(e), file=sys.stderr, flush=True)
+    else:
+        try:
+            print_verbose("Status", "Playing audio", str(audio_file))
+            playsound(audio_file)
+        except KeyboardInterrupt:
+            sys.exit(0)
+        except Exception as e:
+            print("ERROR: Failed to play audio: " + str(e), file=sys.stderr, flush=True)
 
 def run_audio_file_queue(command, command_queue, stop_event):
+    audio_file_index = 0
     try:
         while not stop_event.is_set():
             time.sleep(0.1)
             while not command_queue.empty():
                 audio_file = command_queue.get()
                 while not os.path.exists(audio_file):
-                    time.sleep(0.1) 
-                run_audio_command(audio_file, command)
+                    time.sleep(0.1)
+                play_audio_file(audio_file, command, audio_file_index)
+                audio_file_index += 1
     except KeyboardInterrupt:
-        pass
+        sys.exit(0)
     except Exception as e:
         print("ERROR: Failed to run output audio command: " + str(e), file=sys.stderr, flush=True)
 
 def handle_audio_file(audio_file, command, command_queue = None):
-    if command:
-        if command_queue:
-            command_queue.put(audio_file)
-        else:
-            run_audio_command(audio_file, command)
+    if command_queue:
+        command_queue.put(audio_file)
     else:
-        print(audio_file)
+        play_audio_file(audio_file, command)
 
 def merge_content(file, audio_file, text):
     result = None
@@ -226,9 +248,6 @@ def print_verbose(*args):
 
     if VERBOSE:
         print(*pargs, file=sys.stderr, flush=True)
-
-def process_chunk(chunk_index, chunk_text, *args):
-    pass
 
 def main():
     parser = argparse.ArgumentParser(description='Chat based AI assistant', formatter_class=argparse.RawTextHelpFormatter)
@@ -282,94 +301,100 @@ def main():
             print(session)
         sys.exit(0)
 
-    global ai_providers
-    ai_providers = get_ai_providers()
-
-    global tts_providers, default_tts_provider
-    tts_providers = get_tts_providers()
-    default_tts_provider = tts_providers[0]
-
-    global stt_providers, default_stt_provider
-    stt_providers = get_stt_providers()
-    default_stt_provider = stt_providers[0]
-
-    if args.list_models:
-        for model in list_models():
-            print(model)
-        sys.exit(0)
-
-    if not args.prompt and not args.file and not args.audio:
-        print("ERROR: No prompt specified")
-        parser.print_help()
-        sys.exit(0)
-
-    global VERBOSE
-    VERBOSE = args.verbose
-
-    if not args.model in list_models():
-        print("ERROR: Unknown model:", "'" + args.model + "'.", "Available models:", ", ".join(list_models()))
-        sys.exit(1)
-
-    ai_provider = models[args.model]
-
-    # make sure we use the latest model
-    if not args.no_model_switch:
-        args.model = switch_to_latest_model(args.model)
-
-    f = log_open(args)
-
-    messages = []
-
-    session = None
-    if not args.no_session:
-        if args.session:
-            session = args.session
-            print_verbose("Session", session)
-        elif sys.__stdin__.isatty():
-            # use pid of parent bash shell as session when in interactive shell
-            proc = psutil.Process(os.getpid())
-            while proc is not None:
-                if len(proc.cmdline()) == 1 and proc.cmdline()[0].endswith('bash') and proc.exe().endswith('/bin/bash'):
-                    # use parent bash shell pid as session
-                    timestamp = int(proc.create_time())
-                    session = str(proc.pid) + "_" + time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime(timestamp))
-
-                    print_verbose("Session", str(session), "(tty)")
-                    break
-                proc = proc.parent()
-
-    if session:
-        # load messages from session
-        session_messages = get_session(session)
-        messages.extend(session_messages)
-    else:
-        print_verbose("Session", "N/A")
-
-    new_messages = []
-    role = merge_content(args.role_file, None, args.role)
-    if role:
-        # don't change role
-        for message in messages:
-            if message["role"] == "system":
-                # check if args.role is different
-                if role != message["content"]:
-                    print("ERROR: Role cannot be changed in an existing session, before: " + message["content"] + ", after: " + role)
-                    parser.print_help()
-                    sys.exit(0) 
-                break
-
-        new_messages.append({"role": "system", "content": role})
-
-    raw_prompt = merge_content(args.file, args.audio, args.prompt)
-    if args.print_prompt:
-        print(raw_prompt)
-
-    new_messages.append({"role": "user", "content": raw_prompt})
-    messages.extend(new_messages)
-
-    print_verbose("Messages", str(len(messages)))
+    use_sessions = not args.no_session
 
     try:
+        global ai_providers
+        ai_providers = get_ai_providers()
+
+        global tts_providers, default_tts_provider
+        tts_providers = get_tts_providers()
+        default_tts_provider = tts_providers[0]
+
+        global stt_providers, default_stt_provider
+        stt_providers = get_stt_providers()
+        default_stt_provider = stt_providers[0]
+
+        if args.list_models:
+            for model in list_models():
+                print(model)
+            sys.exit(0)
+
+        if not args.prompt and not args.file and not args.audio:
+            print("ERROR: No prompt specified")
+            parser.print_help()
+            sys.exit(0)
+
+        global VERBOSE
+        VERBOSE = args.verbose
+
+        if not args.model in list_models():
+            print("ERROR: Unknown model:", "'" + args.model + "'.", "Available models:", ", ".join(list_models()))
+            sys.exit(1)
+
+        ai_provider = models[args.model]
+
+        # make sure we use the latest model
+        if not args.no_model_switch:
+            args.model = switch_to_latest_model(args.model)
+
+        if use_sessions:
+            # make sure the AI provider supports sessions
+            use_sessions = ai_provider.supports_sessions()
+
+        f = log_open(args)
+
+        messages = []
+
+        session = None
+        if use_sessions:
+            if args.session:
+                session = args.session
+                print_verbose("Session", session)
+            elif sys.__stdin__.isatty():
+                # use pid of parent bash shell as session when in interactive shell
+                proc = psutil.Process(os.getpid())
+                while proc is not None:
+                    if len(proc.cmdline()) == 1 and proc.cmdline()[0].endswith('bash') and proc.exe().endswith('/bin/bash'):
+                        # use parent bash shell pid as session
+                        timestamp = int(proc.create_time())
+                        session = str(proc.pid) + "_" + time.strftime("%Y-%m-%d_%H-%M-%S", time.gmtime(timestamp))
+
+                        print_verbose("Session", str(session), "(tty)")
+                        break
+                    proc = proc.parent()
+
+        if session:
+            # load messages from session
+            session_messages = get_session(session)
+            messages.extend(session_messages)
+        else:
+            print_verbose("Session", "N/A")
+
+        new_messages = []
+        role = merge_content(args.role_file, None, args.role)
+        if role:
+            # don't change role
+            for message in messages:
+                if message["role"] == "system":
+                    # check if args.role is different
+                    if role != message["content"]:
+                        print("ERROR: Role cannot be changed in an existing session, before: " + message["content"] + ", after: " + role)
+                        parser.print_help()
+                        sys.exit(0)
+                    break
+
+            new_messages.append({"role": "system", "content": role})
+
+        raw_prompt = merge_content(args.file, args.audio, args.prompt)
+        if args.print_prompt:
+            print(raw_prompt)
+
+        new_messages.append({"role": "user", "content": raw_prompt})
+        messages.extend(new_messages)
+
+        print_verbose("Messages", str(len(messages)))
+
         sources = None
         if args.no_sources == False:
             sources = OrderedDict()
@@ -384,7 +409,7 @@ def main():
         stop_event = None
         command_queue = None
         command_thread = None
-        if not args.wait and args.output_audio_command and (args.output == 'audio' or args.output == 'audio+text'):
+        if not args.wait and (args.output == 'audio' or args.output == 'audio+text'):
             stop_event = threading.Event()
             command_queue = queue.Queue()
             command_thread = threading.Thread(target=run_audio_file_queue, args=(args.output_audio_command, command_queue, stop_event))
@@ -395,6 +420,8 @@ def main():
         answer = ""
         if args.wait:
             answer = ai_provider.convert_result_to_text(result, sources, handle_metadata_func)
+            if not sources:
+                answer = ai_provider.remove_source_references(answer)
 
             if VERBOSE:
                 print_verbose()
@@ -409,6 +436,9 @@ def main():
             segment = ""
             for chunk in result:
                 answer_chunk = ai_provider.convert_chunk_to_text(chunk, sources, handle_metadata_func)
+                if not sources:
+                    answer_chunk = ai_provider.remove_source_references(answer_chunk)
+
                 if first:
                     first = False
                     handle_metadata_func = None
@@ -417,50 +447,22 @@ def main():
                 if answer_chunk is not None:
                     answer += answer_chunk
                     segment += answer_chunk
-                    if args.output == 'text':
+                    if args.output == 'text' or args.output == 'audio+text':
                         log(f, answer_chunk)
                     if args.output == 'audio' or args.output == 'audio+text':
-                        # make sure we try to send sentences to tts, with at least 50 charactersS
+                        # make sure we try to send sentences to tts, with at least 50 characters
                         match = re.search(r'^.{50,}[^0-9][\.\!\?]', segment, re.DOTALL)
                         if match:
                             sentence_end = match.end()
                             sentence = segment[:sentence_end].strip()
                             segment = segment[sentence_end:]
+                            if sources:
+                                # always remove source refs for TTS, if they are requested
+                                sentence = ai_provider.remove_source_references(sentence).strip()
                             if sentence:
                                 if not tts_queue.empty():
                                     handle_audio_file(tts_queue.get(), args.output_audio_command, command_queue)
                                 tts(sentence, args.output_audio_command, tts_threads, tts_queue)
-
-            if args.output == 'audio' or args.output == 'audio+text':
-                # tts the last segment, if any
-                segment = segment.strip()
-                if segment:
-                    tts(segment, args.output_audio_command, tts_threads, tts_queue)
-
-                # wait for all tts tasks to be done
-                print_verbose("Status", "Waiting for TTS threads to finish...")
-                try:
-                    for t in tts_threads:
-                        t.join()
-                except KeyboardInterrupt:
-                    sys.exit(0)
-
-                print_verbose("Status", "Handling remaining audio files...")
-                while not tts_queue.empty():
-                    handle_audio_file(tts_queue.get(), args.output_audio_command, command_queue)
-
-                if command_thread and stop_event:
-                    print_verbose("Status", "Waiting for command thread to finish...")
-                    stop_event.set()
-                    try:
-                        command_thread.join()
-                    except KeyboardInterrupt:
-                        sys.exit(0)
-
-            if args.output == 'audio+text':
-                if not args.output_audio_command:
-                    print()
-                log(f, answer)
 
         if sources:
             print()
@@ -471,18 +473,54 @@ def main():
             # save query and answer to session
             new_messages.append({"role": "assistant", "content": answer})
             append_session(session, new_messages)
+
+        # wait for tts to finish
+        if not args.wait and args.output == 'audio' or args.output == 'audio+text':
+            # check if there is a segment left
+            segment = segment.strip()
+            if sources:
+                # always remove source refs for TTS, if they are requested
+                segment = ai_provider.remove_source_references(segment).strip()
+
+            if segment:
+                tts(segment, args.output_audio_command, tts_threads, tts_queue)
+
+            # wait for all tts tasks to be done
+            print_verbose("Status", "Waiting for TTS threads to finish...")
+            sys.stdout.flush()
+            try:
+                for t in tts_threads:
+                    t.join()
+            except KeyboardInterrupt:
+                sys.exit(0)
+
+            print_verbose("Status", "Handling remaining audio files...")
+            while not tts_queue.empty():
+                handle_audio_file(tts_queue.get(), args.output_audio_command, command_queue)
+
+            if command_thread and stop_event:
+                print_verbose("Status", "Waiting for command thread to finish...")
+                sys.stdout.flush()
+                stop_event.set()
+                try:
+                    command_thread.join()
+                except KeyboardInterrupt:
+                    sys.exit(0)
+
     except KeyboardInterrupt:
         sys.exit(0)
     except Exception as e:
         print("ERROR: " + str(e))
         log_close(f, False)
+        sys.exit(1)
+    finally:
         try:
-            ai_provider.close()
-        except:
-            pass
-        exit(1)
+            if ai_providers:
+                for p in ai_providers:
+                    p.close()
+        except Exception as e:
+            print("ERROR: " + str(e))
 
-    ai_provider.close()
     log_close(f)
 
 

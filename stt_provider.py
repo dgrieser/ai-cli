@@ -1,11 +1,18 @@
-# ai_provider_base.py
-
+import utils
 from abc import ABC, abstractmethod
 
 class STTProvider(ABC):
+
     @abstractmethod
-    def list_models(self):
+    def name(self):
         pass
+
+    @abstractmethod
+    def _list_models(self):
+        pass
+
+    def list_models(self, cache_directory_path):
+        return utils.list_models(self.name(), self._list_models, cache_directory_path)
 
     @abstractmethod
     def speech_to_text(self, model, audio_file):

@@ -8,7 +8,13 @@ class AnthropicAIProvider(AIProvider):
         self.client = Anthropic()
         self.model_names = []
 
-    def list_models(self):
+    def name(self):
+        return "anthropic"
+
+    def supports_sessions(self):
+        return False
+
+    def _list_models(self):
         if not self.model_names:
             # no api function, so hack
             try:
@@ -41,7 +47,7 @@ class AnthropicAIProvider(AIProvider):
             system=system_message,
             stream=stream,
         )
-    
+
     def convert_result_to_text(self, result, sources, handle_metadata_func):
         text = result.content[0].text if result and result.content and len(result.content) > 0 else ''
         if handle_metadata_func:
@@ -49,7 +55,7 @@ class AnthropicAIProvider(AIProvider):
             handle_metadata_func("Model", result.model)
             handle_metadata_func("Usage", str(result.usage))
         return text
-    
+
     def convert_chunk_to_text(self, event, sources, handle_metadata_func):
         text = ''
         if hasattr(event, 'message'):
@@ -71,6 +77,6 @@ class AnthropicAIProvider(AIProvider):
             if hasattr(event, 'usage'):
                 handle_metadata_func("Usage", str(event.usage))
         return text
-    
+
     def close(self):
         pass
