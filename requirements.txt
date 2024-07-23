@@ -2,6 +2,7 @@ anthropic
 beautifulsoup4
 openai
 git+https://github.com/dgrieser/perplexityai.git
+cffi
 miniaudio
 argparse
 argcomplete
