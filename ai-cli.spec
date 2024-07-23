@@ -4,7 +4,7 @@
 a = Analysis(
     ['ai-cli'],
     pathex=['/usr/local/lib/python3.12/dist-packages'],
-    binaries=[('/usr/local/lib/python3.12/dist-packages/_cffi_backend.cpython-312-x86_64-linux-gnu.so', '.')]
+    binaries=[('/usr/local/lib/python3.12/dist-packages/_cffi_backend.cpython-312-x86_64-linux-gnu.so', '.')],
     datas=[],
     hiddenimports=['_cffi_backend'],
     hookspath=[],
