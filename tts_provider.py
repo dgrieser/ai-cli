@@ -8,6 +8,26 @@ class TTSProvider(ABC):
         pass
 
     @abstractmethod
+    def channels(self):
+        pass
+
+    @abstractmethod
+    def samplerate(self):
+        pass
+
+    @abstractmethod
+    def dtype(self):
+        pass
+
+    @abstractmethod
+    def volumegain(self):
+        return 8
+
+    @abstractmethod
+    def blocksize(self):
+        pass
+
+    @abstractmethod
     def _list_models(self):
         pass
 
@@ -16,6 +36,10 @@ class TTSProvider(ABC):
 
     @abstractmethod
     def text_to_speech(self, text, model, voice, speed, audio_file):
+        pass
+
+    @abstractmethod
+    def text_to_speech_stream(self, text, model, voice, speed, virtual_audio_file):
         pass
 
 def get_tts_providers():

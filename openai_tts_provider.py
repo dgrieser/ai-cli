@@ -1,10 +1,8 @@
-# openai_provider.py
-
-import subprocess
 from openai import OpenAI
 from tts_provider import TTSProvider
+from byte_queue_file import ByteQueueFile
 
-TTS_CHUNK_SIZE = 1024
+TTS_CHUNK_SIZE = 2048
 
 class OpenAITTSProvider(TTSProvider):
     def __init__(self):
@@ -14,6 +12,21 @@ class OpenAITTSProvider(TTSProvider):
     def name(self):
         return 'openai-tts'
 
+    def channels(self):
+        return 1
+
+    def samplerate(self):
+        return 24000
+
+    def dtype(self):
+        return 'float32'
+
+    def volumegain(self):
+        return 8
+
+    def blocksize(self):
+        return TTS_CHUNK_SIZE
+
     def _list_models(self):
         if not self.model_names:
             models = self.client.models.list()
@@ -22,18 +35,22 @@ class OpenAITTSProvider(TTSProvider):
             self.model_names = [m.id for m in models.data]
         return self.model_names
 
-    def text_to_speech(self, text, model, voice, speed, audio_file):
-        with self.client.audio.speech.with_streaming_response.create(
+    def get_response(self, text, model, voice, speed):
+        return self.client.audio.speech.with_streaming_response.create(
             model=model if model else 'tts-1',
             voice=voice if voice else 'nova',
             speed=str(speed),
             input=text
-        ) as response:
+        )
+
+    def text_to_speech(self, text, model, voice, speed, audio_file):
+        with self.get_response(text, model, voice, speed) as response:
             with open(audio_file, "wb") as file:
                 for chunk in response.iter_bytes(chunk_size=TTS_CHUNK_SIZE):
                     file.write(chunk)
 
-        try:
-            subprocess.run(["mp3gain", "-g", "8", audio_file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception as e:
-            print(f"WARNING: Failed to run mp3gain: {e}")
+    def text_to_speech_stream(self, text, model, voice, speed, virtual_audio_file: ByteQueueFile):
+        with self.get_response(text, model, voice, speed) as response:
+            for chunk in response.iter_bytes(chunk_size=TTS_CHUNK_SIZE):
+                virtual_audio_file.write(chunk)
+            virtual_audio_file.close()

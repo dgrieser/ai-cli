@@ -3,6 +3,7 @@
 import argparse
 import argcomplete
 import json
+import miniaudio
 import os
 import psutil
 import re
@@ -12,7 +13,7 @@ import time
 import threading
 import subprocess
 import queue
-from playsound import playsound
+from byte_queue_file import ByteQueueFile
 from collections import OrderedDict
 from ai_provider import get_ai_providers
 from tts_provider import get_tts_providers
@@ -25,7 +26,6 @@ models = {}
 ai_providers = []
 tts_providers = []
 stt_providers = []
-default_tts_provider = None
 default_stt_provider = None
 
 VERBOSE = False
@@ -139,35 +139,52 @@ def run_stt(audio_file):
     print_verbose("Transcript", str(message))
     return message
 
-def run_tts(text, audio_file):
-    print_verbose("TTS", str(audio_file), str(text))
-    default_tts_provider.text_to_speech(text, model=None, voice=None, speed=1.0, audio_file=audio_file)
+def run_tts(tts_provider, text, target):
+    print_verbose("TTS", str(target), str(text))
+    if isinstance(target, str):
+        tts_provider.text_to_speech(text, model=None, voice=None, speed=1.0, audio_file=target)
+    else:
+        tts_provider.text_to_speech_stream(text, model=None, voice=None, speed=1.0, virtual_audio_file=target)
 
-def tts(text, command, tts_threads = None, tts_queue = None):
-    audio_file = tempfile.mktemp(suffix=".mp3", prefix=f"{app_identifier}.tmp.", dir="/tmp")
+def tts(tts_provider, text, command, tts_threads = None, tts_queue = None):
+    target = None
+    if command:
+        target = tempfile.mktemp(suffix=".mp3", prefix=f"{app_identifier}.tmp.", dir="/tmp")
+    else:
+        target = ByteQueueFile()
+
     if tts_threads is not None and tts_queue is not None:
-        tts_queue.put(audio_file)
-        t = threading.Thread(target=run_tts, args=(text, audio_file))
+        print_verbose("Status", "Adding audio data to the TTS queue:", str(target))
+        tts_queue.put(target)
+        t = threading.Thread(target=run_tts, args=(tts_provider, text, target))
         tts_threads.append(t)
         t.start()
     else:
-        run_tts(text, audio_file)
-        handle_audio_file(audio_file, command)
+        run_tts(tts_provider, text, target)
+        handle_audio_data(tts_provider, target, command)
 
-def play_audio_file(audio_file, command, index = 0):
-    if index == 0:
-        # check file size
-        while os.path.getsize(audio_file) == 0:
-            print_verbose("Status", "Delaying audio", str(audio_file))
-            time.sleep(0.1)
+def play_audio_file(tts_provider, audio_file):
+    try:
+        stream = miniaudio.stream_any(audio_file, miniaudio.FileFormat.MP3, miniaudio.SampleFormat.FLOAT32, nchannels=tts_provider.channels(), sample_rate=tts_provider.samplerate(), frames_to_read=tts_provider.blocksize())
+        with miniaudio.PlaybackDevice(miniaudio.SampleFormat.FLOAT32, nchannels=tts_provider.channels(), sample_rate=tts_provider.samplerate(), buffersize_msec=500) as device:
+            device.start(stream)
+            while device.callback_generator is not None:
+                time.sleep(0.1)
+        stream.close()
+    except KeyboardInterrupt:
+        sys.exit(0)
+    except Exception as e:
+        print('Failed to play audio:', str(e), file=sys.stderr, flush=True)
 
-        # until we support proper streaming, we need to wait a bit longer
-        time.sleep(0.5)
-
+def handle_audio_file(tts_provider, target, command):
     if command:
+        if not isinstance(target, str):
+            print("ERROR: Unexpected argument for target: " + str(target), file=sys.stderr, flush=True)
+            return
+
         if '{}' in command:
-            command = command.format(audio_file)
-        print_verbose("Status", "Running audio command", str(command))
+            command = command.format(target)
+        print_verbose("Status", "Running audio command:", str(command))
         try:
             subprocess.run(['bash', '-c', command], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except KeyboardInterrupt:
@@ -176,34 +193,33 @@ def play_audio_file(audio_file, command, index = 0):
             print("ERROR: Failed to run output audio command: " + str(e), file=sys.stderr, flush=True)
     else:
         try:
-            print_verbose("Status", "Playing audio", str(audio_file))
-            playsound(audio_file)
+            print_verbose("Status", "Playing audio data: ", str(target))
+            play_audio_file(tts_provider, target)
         except KeyboardInterrupt:
             sys.exit(0)
         except Exception as e:
             print("ERROR: Failed to play audio: " + str(e), file=sys.stderr, flush=True)
 
-def run_audio_file_queue(command, command_queue, stop_event):
-    audio_file_index = 0
+def run_audio_file_queue(tts_provider, command, command_queue, stop_event):
     try:
         while not stop_event.is_set():
-            time.sleep(0.1)
             while not command_queue.empty():
-                audio_file = command_queue.get()
-                while not os.path.exists(audio_file):
-                    time.sleep(0.1)
-                play_audio_file(audio_file, command, audio_file_index)
-                audio_file_index += 1
+                target = command_queue.get()
+                print_verbose("Status", "Handling audio data", str(target))
+                handle_audio_file(tts_provider, target, command)
+
+            time.sleep(0.1)
     except KeyboardInterrupt:
         sys.exit(0)
     except Exception as e:
         print("ERROR: Failed to run output audio command: " + str(e), file=sys.stderr, flush=True)
 
-def handle_audio_file(audio_file, command, command_queue = None):
+def handle_audio_data(tts_provider, target, command, command_queue = None):
     if command_queue:
-        command_queue.put(audio_file)
+        print_verbose("Status", "Adding audio data from the TTS queue to the command queue:", str(target))
+        command_queue.put(target)
     else:
-        play_audio_file(audio_file, command)
+        handle_audio_file(tts_provider, target, command)
 
 def merge_content(file, audio_file, text):
     result = None
@@ -307,9 +323,9 @@ def main():
         global ai_providers
         ai_providers = get_ai_providers()
 
-        global tts_providers, default_tts_provider
+        global tts_providers
         tts_providers = get_tts_providers()
-        default_tts_provider = tts_providers[0]
+        tts_provider = tts_providers[0]
 
         global stt_providers, default_stt_provider
         stt_providers = get_stt_providers()
@@ -412,7 +428,7 @@ def main():
         if not args.wait and (args.output == 'audio' or args.output == 'audio+text'):
             stop_event = threading.Event()
             command_queue = queue.Queue()
-            command_thread = threading.Thread(target=run_audio_file_queue, args=(args.output_audio_command, command_queue, stop_event))
+            command_thread = threading.Thread(target=run_audio_file_queue, args=(tts_provider, args.output_audio_command, command_queue, stop_event))
             command_thread.start()
 
         tts_threads = []
@@ -427,7 +443,7 @@ def main():
                 print_verbose()
 
             if args.output == 'audio' or args.output == 'audio+text':
-                tts(answer, args.output_audio_command)
+                tts(tts_provider, answer, args.output_audio_command)
             if args.output == 'text' or args.output == 'audio+text':
                 log(f, answer)
         else:
@@ -461,8 +477,8 @@ def main():
                                 sentence = ai_provider.remove_source_references(sentence).strip()
                             if sentence:
                                 if not tts_queue.empty():
-                                    handle_audio_file(tts_queue.get(), args.output_audio_command, command_queue)
-                                tts(sentence, args.output_audio_command, tts_threads, tts_queue)
+                                    handle_audio_data(tts_provider, tts_queue.get(), args.output_audio_command, command_queue)
+                                tts(tts_provider, sentence, args.output_audio_command, tts_threads, tts_queue)
 
         if sources:
             print()
@@ -483,7 +499,7 @@ def main():
                 segment = ai_provider.remove_source_references(segment).strip()
 
             if segment:
-                tts(segment, args.output_audio_command, tts_threads, tts_queue)
+                tts(tts_provider, segment, args.output_audio_command, tts_threads, tts_queue)
 
             # wait for all tts tasks to be done
             print_verbose("Status", "Waiting for TTS threads to finish...")
@@ -496,7 +512,7 @@ def main():
 
             print_verbose("Status", "Handling remaining audio files...")
             while not tts_queue.empty():
-                handle_audio_file(tts_queue.get(), args.output_audio_command, command_queue)
+                handle_audio_data(tts_provider, tts_queue.get(), args.output_audio_command, command_queue)
 
             if command_thread and stop_event:
                 print_verbose("Status", "Waiting for command thread to finish...")
