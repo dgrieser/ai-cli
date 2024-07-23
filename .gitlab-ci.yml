@@ -13,6 +13,7 @@ build_job:
   script:
     - |
       set -e
+      . .env
       apt update
       apt install -y libgstreamer1.0-0 gstreamer1.0-tools
       python -V
@@ -20,7 +21,7 @@ build_job:
       printf "$(cat version.py)" "${VERSION}" > version.py
       pip install -U pip
       pip install -r requirements.txt
-      pyinstaller ${CI_PROJECT_NAME} --onefile
+      pyinstaller ${PYINSTALLER_ARGS} ${CI_PROJECT_NAME} --onefile
       set -x
       ./dist/${CI_PROJECT_NAME} --version
       set +x
