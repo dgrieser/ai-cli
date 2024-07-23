@@ -21,7 +21,7 @@ build_job:
       printf "$(cat version.py)" "${VERSION}" > version.py
       pip install -U pip
       pip install -r requirements.txt
-      pyinstaller ${PYINSTALLER_ARGS} ${CI_PROJECT_NAME} --onefile
+      pyinstaller ${CI_PROJECT_NAME}.spec
       set -x
       ./dist/${CI_PROJECT_NAME} --version
       set +x
