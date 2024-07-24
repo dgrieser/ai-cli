@@ -199,7 +199,7 @@ class PerplexityAiProvider(AIProvider):
                         if not url in sources:
                             name = w.get('name', '').strip()
                             if len(name) > 0:
-                                title = f'[{len(sources) + 1}] {w.get('name', '')}:'
+                                title = f'[{len(sources) + 1}] {name}:'
                             else:
                                 title = f'[{len(sources) + 1}]'
                             sources[url] = title
