@@ -150,6 +150,8 @@ class PerplexityAiProvider(AIProvider):
 
         for part in parts:
             current_part = part
+            thread_url_slug = current_part.get('thread_url_slug', '')
+            thread_title = current_part.get('thread_title', '').strip()
             ok, text = self.__extract_text_from_chunk(current_part)
             if not ok and 'text' in current_part:
                 # for the last part, the remaining chunks and web_results seem to be in 'text'
@@ -169,17 +171,25 @@ class PerplexityAiProvider(AIProvider):
                         current_part = self.__extract_copilot_answer(last_step)
                         ok, text = self.__extract_text_from_chunk(current_part)
 
+                    if not thread_url_slug:
+                        thread_url_slug = current_part.get('thread_url_slug', '')
+                    if not thread_title:
+                        thread_title = current_part.get('thread_title', '').strip()
+
             if sources is not None:
-                mode = current_part.get('mode', '')
-                model_title = 'Perplexity'
-                if mode == mode_pro:
-                    model_title = 'Perplexity Pro'
-                thread_url_slug = current_part.get('thread_url_slug', '')
                 if thread_url_slug:
+                    mode = current_part.get('mode', '')
+                    model_title = 'Perplexity'
+                    if mode == mode_pro:
+                        model_title = 'Perplexity Pro'
+
                     url = f'https://perplexity.ai/search/{thread_url_slug}'
-                    thread_title = current_part.get('thread_title', '')
                     if not url in sources:
-                        sources[url] = f'{model_title}: {thread_title}'
+                        if len(thread_title) > 0:
+                            thread_title = f'{model_title}: {thread_title}:'
+                        else:
+                            thread_title = f'{model_title}:'
+                        sources[url] = thread_title
 
                 web_results = current_part.get('web_results', [])
                 web_results.extend(current_part.get('extra_web_results', []))
@@ -187,8 +197,12 @@ class PerplexityAiProvider(AIProvider):
                     for w in web_results:
                         url = w.get('url', '')
                         if not url in sources:
-                            name = f'[{len(sources) + 1}] {w.get('name', '')}'
-                            sources[url] = name
+                            name = w.get('name', '').strip()
+                            if len(name) > 0:
+                                title = f'[{len(sources) + 1}] {w.get('name', '')}:'
+                            else:
+                                title = f'[{len(sources) + 1}]'
+                            sources[url] = title
         return text
 
     def close(self):

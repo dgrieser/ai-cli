@@ -513,7 +513,15 @@ def main():
         if sources:
             print()
             for k, v in sources.items():
-                log(f, f'\n{v}:\n{k}\n')
+                title = str(v).strip()
+                url = str(k).strip()
+                if len(url) == 0 and len(title) == 0:
+                    continue
+
+                if len(title) > 0:
+                    log(f, f'\n{title}\n{url}\n')
+                else:
+                    log(f, f'{url}\n')
 
         if session:
             # save query and answer to session
