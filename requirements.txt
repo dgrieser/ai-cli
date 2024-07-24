@@ -3,7 +3,9 @@ beautifulsoup4
 openai
 git+https://github.com/dgrieser/perplexityai.git
 cffi
+langdetect
 miniaudio
+num2words
 argparse
 argcomplete
 psutil

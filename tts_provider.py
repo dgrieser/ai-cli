@@ -1,7 +1,12 @@
 import utils
+from enum import Enum
 from abc import ABC, abstractmethod
 
 class TTSProvider(ABC):
+
+    class Format(Enum):
+        WAV = 1
+        MP3 = 2
 
     @abstractmethod
     def name(self):
@@ -25,6 +30,10 @@ class TTSProvider(ABC):
 
     @abstractmethod
     def blocksize(self):
+        pass
+
+    @abstractmethod
+    def format(self) -> Format:
         pass
 
     @abstractmethod

@@ -21,6 +21,9 @@ class OpenAITTSProvider(TTSProvider):
     def dtype(self):
         return 'float32'
 
+    def format(self):
+        return TTSProvider.Format.MP3
+
     def volumegain(self):
         return 8
 
@@ -39,6 +42,7 @@ class OpenAITTSProvider(TTSProvider):
         return self.client.audio.speech.with_streaming_response.create(
             model=model if model else 'tts-1',
             voice=voice if voice else 'nova',
+            response_format='mp3',
             speed=str(speed),
             input=text
         )
