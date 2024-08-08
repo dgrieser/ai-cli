@@ -30,6 +30,9 @@ class OpenAITTSProvider(TTSProvider):
     def blocksize(self):
         return TTS_CHUNK_SIZE
 
+    def max_length(self):
+        return 4096
+
     def _list_models(self):
         if not self.model_names:
             models = self.client.models.list()

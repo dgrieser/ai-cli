@@ -1,6 +1,9 @@
 from num2words import num2words
 from langdetect import detect
 from num2words import CONVERTER_CLASSES
+import re
+
+URL_PATTERN = re.compile(r'https*:[^ ]+')
 
 def get_supported_languages():
     return list(CONVERTER_CLASSES.keys())
@@ -8,7 +11,7 @@ def get_supported_languages():
 def is_digit(char):
     return char.isdigit()
 
-def convert_numbers_to_words(text):
+def optimize_for_tts(text):
     # Detect the language
     detected_lang = detect(text)
 
@@ -26,8 +29,26 @@ def convert_numbers_to_words(text):
     lines.extend(text.splitlines())
     for i in range(len(lines)):
         lines[i] = convert_numbers_to_words_in_line(lines[i], lang)
+        lines[i] = convert_symbols_to_words(lines[i], lang)
+        lines[i] = replace_urls(lines[i], lang)
 
     return '\n'.join(lines)
+
+def replace_urls(text, lang):
+    if lang == 'en':
+        return URL_PATTERN.sub('(see link in the text)', text)
+    elif lang == 'de':
+        return URL_PATTERN.sub('(siehe Link im Text)', text)
+
+    return text
+
+def convert_symbols_to_words(text, lang):
+    if lang == 'en':
+        return text.replace('°C', 'degrees Celsius').replace('°F', 'degrees Fahrenheit')
+    elif lang == 'de':
+        return text.replace('°C', 'Grad Celsius').replace('°F', 'Grad Fahrenheit')
+
+    return text
 
 def convert_numbers_to_words_in_line(text, lang):
     result = []

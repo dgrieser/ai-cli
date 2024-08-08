@@ -37,6 +37,10 @@ class TTSProvider(ABC):
         pass
 
     @abstractmethod
+    def max_length(self):
+        pass
+
+    @abstractmethod
     def _list_models(self):
         pass
 
@@ -55,4 +59,6 @@ def get_tts_providers():
     providers = []
     from openai_tts_provider import OpenAITTSProvider
     providers.append(OpenAITTSProvider())
+    from print_tts_provider import PrintTTSProvider
+    providers.append(PrintTTSProvider())
     return providers

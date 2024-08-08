@@ -12,7 +12,7 @@ class AnthropicAIProvider(AIProvider):
         return "anthropic"
 
     def supports_sessions(self):
-        return False
+        return True
 
     def _list_models(self):
         if not self.model_names:

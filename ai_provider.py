@@ -38,6 +38,8 @@ class AIProvider(ABC):
 
 def get_ai_providers():
     providers = []
+    from passthrough_ai_provider import PassthroughProvider
+    providers.append(PassthroughProvider())
     from openai_ai_provider import OpenAIProvider
     providers.append(OpenAIProvider())
     from anthropic_ai_provider import AnthropicAIProvider
