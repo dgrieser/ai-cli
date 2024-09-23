@@ -33,6 +33,12 @@ class OpenAITTSProvider(TTSProvider):
     def max_length(self):
         return 4096
 
+    def default_voice(self):
+        return 'nova'
+
+    def default_model(self):
+        return 'tts-1'
+
     def _list_models(self):
         if not self.model_names:
             models = self.client.models.list()
@@ -41,23 +47,26 @@ class OpenAITTSProvider(TTSProvider):
             self.model_names = [m.id for m in models.data]
         return self.model_names
 
-    def get_response(self, text, model, voice, speed):
+    def _list_voices(self):
+        return [ 'alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer' ]
+
+    def get_response(self, text, model, voice_id, speed):
         return self.client.audio.speech.with_streaming_response.create(
-            model=model if model else 'tts-1',
-            voice=voice if voice else 'nova',
+            model=model if model else self.default_model(),
+            voice=voice_id,
             response_format='mp3',
             speed=str(speed),
             input=text
         )
 
-    def text_to_speech(self, text, model, voice, speed, audio_file):
-        with self.get_response(text, model, voice, speed) as response:
+    def text_to_speech(self, text, model, voice_id, speed, audio_file):
+        with self.get_response(text, model, voice_id, speed) as response:
             with open(audio_file, "wb") as file:
                 for chunk in response.iter_bytes(chunk_size=TTS_CHUNK_SIZE):
                     file.write(chunk)
 
-    def text_to_speech_stream(self, text, model, voice, speed, virtual_audio_file: ByteQueueFile):
-        with self.get_response(text, model, voice, speed) as response:
+    def text_to_speech_stream(self, text, model, voice_id, speed, virtual_audio_file: ByteQueueFile):
+        with self.get_response(text, model, voice_id, speed) as response:
             for chunk in response.iter_bytes(chunk_size=TTS_CHUNK_SIZE):
                 virtual_audio_file.write(chunk)
             virtual_audio_file.close()

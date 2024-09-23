@@ -5,6 +5,8 @@ git+https://github.com/dgrieser/perplexityai.git
 cffi
 langdetect
 miniaudio
+elevenlabs
+pyht
 num2words
 argparse
 argcomplete

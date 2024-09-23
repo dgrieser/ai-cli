@@ -1,5 +1,5 @@
 from num2words import num2words
-from langdetect import detect
+from langdetect import detect_langs, detect
 from num2words import CONVERTER_CLASSES
 import re
 
@@ -11,9 +11,17 @@ def get_supported_languages():
 def is_digit(char):
     return char.isdigit()
 
-def optimize_for_tts(text):
+def detect_language(text):
+    return detect(text)
+
+def optimize_for_tts(text, lang_hint=None) -> tuple[str, str]:
     # Detect the language
     detected_lang = detect(text)
+
+    for lang in detect_langs(text):
+        print(lang.lang)
+        print(type(lang.prob))
+        print(lang.prob)
 
     # Get supported languages
     supported_langs = get_supported_languages()
@@ -23,7 +31,7 @@ def optimize_for_tts(text):
         lang = detected_lang
     else:
         print(f"WARNING: Language '{detected_lang}' not supported, skipping TTS optimization.")
-        return text
+        return text, None
 
     lines = []
     lines.extend(text.splitlines())
@@ -32,7 +40,7 @@ def optimize_for_tts(text):
         lines[i] = convert_symbols_to_words(lines[i], lang)
         lines[i] = replace_urls(lines[i], lang)
 
-    return '\n'.join(lines)
+    return '\n'.join(lines), detected_lang
 
 def replace_urls(text, lang):
     if lang == 'en':

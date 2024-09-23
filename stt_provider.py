@@ -12,7 +12,7 @@ class STTProvider(ABC):
         pass
 
     def list_models(self, cache_directory_path):
-        return utils.list_models(self.name(), self._list_models, cache_directory_path)
+        return utils.list_models(self.name(), self._list_models, True, cache_directory_path)
 
     @abstractmethod
     def speech_to_text(self, model, audio_file):

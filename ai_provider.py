@@ -15,7 +15,7 @@ class AIProvider(ABC):
         pass
 
     def list_models(self, cache_directory_path):
-        return utils.list_models(self.name(), self._list_models, cache_directory_path)
+        return utils.list_models(self.name(), self._list_models, True, cache_directory_path)
 
     @abstractmethod
     def chat_completion(self, messages, model, stream=False):
@@ -44,8 +44,6 @@ def get_ai_providers():
     providers.append(OpenAIProvider())
     from anthropic_ai_provider import AnthropicAIProvider
     providers.append(AnthropicAIProvider())
-    #from metaai_ai_provider import MetaAiProvider
-    #providers.append(MetaAiProvider())
     from perplexity_ai_provider import PerplexityAiProvider
     providers.append(PerplexityAiProvider())
     return providers
