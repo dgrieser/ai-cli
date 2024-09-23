@@ -10,6 +10,9 @@ class OpenAIProvider(AIProvider):
     def name(self):
         return 'openai'
 
+    def supports_sessions(self):
+        return True
+
     def _list_models(self):
         if not self.model_names:
             models = self.client.models.list()
