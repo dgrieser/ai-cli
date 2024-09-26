@@ -359,13 +359,35 @@ def handle_audio_data(tts_provider, target, command, delay_ms, command_queue = N
     else:
         handle_audio_file(tts_provider, target, command, delay_ms)
 
-def merge_content(file, audio_file, text):
+def merge_content(file, audio_file, text, prompt = False):
     result = None
     if text:
         if isinstance(text, str):
             result = text
         else:
             result = ' '.join(text)
+
+    if prompt:
+        print('(Press Ctrl-D end input.)', file=sys.stderr)
+        lines = []
+        while True:
+            try:
+                line = input()
+            except KeyboardInterrupt:
+                print('')
+                exit(1)
+            except EOFError:
+                break
+
+            lines.append(line)
+
+        if len(lines) > 0:
+            if result and len(result) > 0:
+                result += '\n'
+            else:
+                result = ''
+
+            result += '\n'.join(lines)
 
     audio_content = None
     if audio_file:
@@ -402,6 +424,7 @@ def main():
     parser.add_argument('-t', '--tts-model', type=str, help='Which TTS model to use', default='tts-1').completer = tts_model_complete
     parser.add_argument('-v', '--tts-voice', type=str, help='Which TTS voice to use', required=False)
     parser.add_argument('-f', '--file', type=str, help='File with content to append to the prompt, - for stdin', default='').completer = lambda: [f for f in os.listdir('.') if os.path.isfile(f)]
+    parser.add_argument('-i', '--input', action='store_true', help='Prompt for multi line input', default=False)
     parser.add_argument("-p", "--print-prompt", action="store_true", help="Print the prompt", default=False)
     parser.add_argument('-a', '--audio', type=str, help='Audio file with content to append to the prompt (will use speech-to-text to transcribe)', default='').completer = lambda: [f for f in os.listdir('.') if os.path.isfile(f)]
     parser.add_argument('-o', '--output', type=str, help='Output format', choices=['text', 'audio', 'audio+text'], default='text')
@@ -492,7 +515,7 @@ def main():
                 print(voice)
             sys.exit(0)
 
-        if not args.prompt and not args.file and not args.audio:
+        if not args.prompt and not args.file and not args.audio and not args.input:
             print_error("No prompt or file specified")
             parser.print_help()
             sys.exit(0)
@@ -567,7 +590,12 @@ def main():
 
             new_messages.append({"role": "system", "content": role})
 
-        raw_prompt = merge_content(args.file, args.audio, args.prompt)
+        raw_prompt = merge_content(args.file, args.audio, args.prompt, args.input)
+        if raw_prompt is None:
+            print_error("Prompt is empty")
+            parser.print_help()
+            sys.exit(0)
+
         if args.print_prompt:
             print(raw_prompt)
 
