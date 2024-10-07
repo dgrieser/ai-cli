@@ -26,7 +26,7 @@ class AIProvider(ABC):
         pass
 
     @abstractmethod
-    def convert_chunk_to_text(self, chunk, sources, handle_metadata_func):
+    def convert_chunk_to_text(self, chunk, text_chunks, sources, handle_metadata_func):
         pass
 
     def remove_source_references(self, text):

@@ -56,7 +56,7 @@ class AnthropicAIProvider(AIProvider):
             handle_metadata_func("Usage", str(result.usage))
         return text
 
-    def convert_chunk_to_text(self, event, sources, handle_metadata_func):
+    def convert_chunk_to_text(self, event, text_chunks, sources, handle_metadata_func):
         text = ''
         if hasattr(event, 'message'):
             event = event.message

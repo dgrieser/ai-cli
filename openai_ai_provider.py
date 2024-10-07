@@ -38,7 +38,7 @@ class OpenAIProvider(AIProvider):
             handle_metadata_func("Tokens", str(result.usage.total_tokens))
         return text
 
-    def convert_chunk_to_text(self, chunk, sources, handle_metadata_func):
+    def convert_chunk_to_text(self, chunk, text_chunks, sources, handle_metadata_func):
         if handle_metadata_func:
             handle_metadata_func("ID", str(chunk.id))
             handle_metadata_func("Creation", time.strftime('%Y-%m-%dT%H:%M:%S%z', time.gmtime(chunk.created)))

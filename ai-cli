@@ -656,8 +656,9 @@ def main():
             first_tts = True
             answer = ""
             segment = ""
+            text_chunks = []
             for chunk in result:
-                answer_chunk = ai_provider.convert_chunk_to_text(chunk, sources, handle_metadata_func)
+                answer_chunk = ai_provider.convert_chunk_to_text(chunk, text_chunks, sources, handle_metadata_func)
                 if not sources:
                     answer_chunk = ai_provider.remove_source_references(answer_chunk)
 

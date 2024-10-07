@@ -95,24 +95,31 @@ class PerplexityAiProvider(AIProvider):
     def convert_result_to_text(self, result, sources, handle_metadata_func):
         text = ''
         last_chunk = None
+        text_chunks = []
         for chunk in result:
             if not last_chunk:
                 self.__handle_metadata(chunk, handle_metadata_func)
-            text += self.convert_chunk_to_text(chunk, sources, None)
+            text += self.convert_chunk_to_text(chunk, text_chunks, sources, None)
             last_chunk = chunk
         if last_chunk:
             self.__handle_metadata(last_chunk, handle_metadata_func)
 
         return text
 
-    def __extract_text_from_chunk(self, chunk):
+    def __extract_text_from_chunk(self, chunk, text_chunks):
         text = ''
         ok = False
         if isinstance(chunk, dict) and 'chunks' in chunk:
             ok = True
             chunks = chunk.get('chunks', [])
             if len(chunks) > 0:
-                text = chunks[-1]
+                new_count = len(chunks) - len(text_chunks)
+                # make sure we only add new chunks
+                if new_count > 0:
+                    new_chunks = chunks[-new_count:]
+                    print(new_chunks)
+                    text_chunks.extend(new_chunks)
+                    text = ''.join(new_chunks)
         return ok, text
 
     def remove_source_references(self, text):
@@ -134,7 +141,7 @@ class PerplexityAiProvider(AIProvider):
 
         return None
 
-    def convert_chunk_to_text(self, chunk, sources, handle_metadata_func):
+    def convert_chunk_to_text(self, chunk, text_chunks, sources, handle_metadata_func):
         text = ''
         self.__handle_metadata(chunk, handle_metadata_func)
 
@@ -152,7 +159,7 @@ class PerplexityAiProvider(AIProvider):
             current_part = part
             thread_url_slug = current_part.get('thread_url_slug', '')
             thread_title = current_part.get('thread_title', '').strip()
-            ok, text = self.__extract_text_from_chunk(current_part)
+            ok, text = self.__extract_text_from_chunk(current_part, text_chunks)
             if not ok and 'text' in current_part:
                 # for the last part, the remaining chunks and web_results seem to be in 'text'
                 text_value = current_part.get('text', {})
@@ -164,12 +171,12 @@ class PerplexityAiProvider(AIProvider):
                 if not text_value is None:
                     if isinstance(text_value, dict):
                         current_part = text_value
-                        ok, text = self.__extract_text_from_chunk(current_part)
+                        ok, text = self.__extract_text_from_chunk(current_part, text_chunks)
                     elif isinstance(text_value, list):
                         # looks like copilot steps
                         last_step = text_value[-1]
                         current_part = self.__extract_copilot_answer(last_step)
-                        ok, text = self.__extract_text_from_chunk(current_part)
+                        ok, text = self.__extract_text_from_chunk(current_part, text_chunks)
 
                     if not thread_url_slug:
                         thread_url_slug = current_part.get('thread_url_slug', '')

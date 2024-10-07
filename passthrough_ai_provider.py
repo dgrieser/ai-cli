@@ -24,7 +24,7 @@ class PassthroughProvider(AIProvider):
         text = '\n'.join(result)
         return text
 
-    def convert_chunk_to_text(self, chunk, sources, handle_metadata_func):
+    def convert_chunk_to_text(self, chunk, text_chunks, sources, handle_metadata_func):
         return chunk
 
     def close(self):
