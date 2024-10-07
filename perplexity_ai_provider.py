@@ -117,7 +117,6 @@ class PerplexityAiProvider(AIProvider):
                 # make sure we only add new chunks
                 if new_count > 0:
                     new_chunks = chunks[-new_count:]
-                    print(new_chunks)
                     text_chunks.extend(new_chunks)
                     text = ''.join(new_chunks)
         return ok, text
