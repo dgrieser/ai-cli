@@ -13,18 +13,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: python:3.12
+      image: python:3.12-bookworm
     steps:
       - uses: actions/checkout@v4
-      - name: Build and test
+      - name: Build
         run: |
           set -e
+          . .env
+          apt update
+          [ -v APT_PACKAGES ] && apt install -y ${APT_PACKAGES}
           python -V
           export VERSION=${{ github.ref_name }}
           printf "$(cat version.py)" "${VERSION}" > version.py
           pip install -U pip
           pip install -r requirements.txt
-          pyinstaller ${{ github.event.repository.name }} --onefile
+          pyinstaller ${{ github.event.repository.name }}.spec
           set -x
           ./dist/${{ github.event.repository.name }} --version
           set +x
